@@ -4256,6 +4256,62 @@
             loop: true,
         });
     </script>
+
+<script>
+// 1. ユーザーIDの発行・取得処理
+let userId = localStorage.getItem('user_id');
+if (!userId) {
+    userId = 'user_' + Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
+    localStorage.setItem('user_id', userId);
+}
+
+// 2. URLから広告コードを取得して保存
+const urlParams = new URLSearchParams(window.location.search);
+const adCode = urlParams.get('a');
+if (adCode) { 
+    localStorage.setItem('ad_code', adCode); 
+}
+
+// 3. ログ送信関数
+function sendLog(event, memo = "") {
+    const code = localStorage.getItem('ad_code') || "direct";
+    const gasUrl = "https://script.google.com/macros/s/AKfycbwbGi7Y9XFFmUS8t_KDXC6uQG-zIA9uOuPkWgh8HmPGJIGtXcJUlUgEzrBL-Sm64XML/exec";
+
+    fetch(gasUrl, {
+        method: "POST",
+        mode: "no-cors", 
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+            ad_code: code,
+            user_id: userId,
+            event: event,
+            page: window.location.href,
+            memo: memo
+        })
+    });
+}
+
+// 4. ページ表示時の処理
+window.addEventListener('DOMContentLoaded', () => {
+    // ページ閲覧のメモ欄をURLに応じて分かりやすく自動変更
+    let pageMemo = "ページ閲覧";
+    if (window.location.href.includes('/thanks/')) pageMemo = "サンクス到達";
+    if (window.location.href.includes('/sales/')) pageMemo = "SL閲覧";
+    
+    sendLog("page_view", pageMemo);
+
+    // 次のページへのリンク（trelab123.jpを含むaタグ）にコードを自動付与
+    const nextBtn = document.querySelector('a[href*="trelab123.jp"]');
+    const savedCode = localStorage.getItem('ad_code');
+    if (nextBtn) {
+        const url = new URL(nextBtn.href);
+        if (savedCode) url.searchParams.set('a', savedCode);
+        url.searchParams.set('uid', userId); // ユーザーIDを次のドメインへ引き継ぐ
+        nextBtn.href = url.toString(); 
+    }
+});
+</script>
+
 </body>
 
 </html>
