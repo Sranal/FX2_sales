@@ -3542,7 +3542,9 @@
                     <div class="row text-center">
                         <div class="mb-4 px-0">
 
-                            <a href="/LP/pay/index_ft248.php" target="_blank" rel="noopener" class="btn btn_bl btn_or">
+                            <!-- インフォカートアフィリリンクに差し替え -->
+                            <!-- <a href="/LP/pay/index_ft248.php" target="_blank" rel="noopener" class="btn btn_bl btn_or"> -->
+                            <a href="https://www.infocart.jp/e/81212/202969/" target="_blank" rel="noopener" class="btn btn_bl btn_or">
                                 今すぐトレLabに参加する<br>
                             </a>
                        </div>
@@ -4090,7 +4092,10 @@
                     </div>
                     <div class="row text-center">
                         <div class="mb-4 px-0">
-                            <a href="/LP/pay/index_ft248.php" target="_blank" rel="noopener" class="btn btn_bl btn_or">
+
+                            <!-- インフォカートアフィリリンクに差し替え -->
+                            <!-- <a href="/LP/pay/index_ft248.php" target="_blank" rel="noopener" class="btn btn_bl btn_or"> -->
+                            <a href="https://www.infocart.jp/e/81212/202969/" target="_blank" rel="noopener" class="btn btn_bl btn_or">
                                 今すぐトレLabに参加する<br>
                             </a>
                        </div>
@@ -4147,60 +4152,106 @@
         });
     </script>
 
+<!-- 自社計測用タグ v2 / SL用 (2026-07-26) -->
 <script>
-// 1. ユーザーIDの発行・取得処理
-let userId = localStorage.getItem('user_id');
-if (!userId) {
-    userId = 'user_' + Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
-    localStorage.setItem('user_id', userId);
-}
+(function () {
+  var GAS_URL = "https://script.google.com/macros/s/AKfycbxfuVj4l63-forBiamDeL-l3Se1OE6OZRUWYWRlk-6zG0zpi2r4OPqjbwyFzpJn5eGe/exec";
+  var COOKIE_DOMAIN = ".tralab.jp";
 
-// 2. URLから広告コードを取得して保存
-const urlParams = new URLSearchParams(window.location.search);
-const adCode = urlParams.get('a');
-if (adCode) { 
-    localStorage.setItem('ad_code', adCode); 
-}
+  /* --- localStorage 安全ラッパー ---
+     LINEアプリ内ブラウザ・iOS Safari プライベート等では例外を投げる。
+     素で触るとタグ全体が停止し、SL閲覧ログすら飛ばなくなる。 */
+  var mem = {};
+  function lsGet(k){ try { return localStorage.getItem(k); } catch(e){ return mem[k] || null; } }
+  function lsSet(k,v){ try { localStorage.setItem(k,v); } catch(e){ mem[k] = v; } }
+  function getCookie(n){
+    try { var m = document.cookie.match('(?:^|; )'+n+'=([^;]*)'); return m ? decodeURIComponent(m[1]) : ''; }
+    catch(e){ return ''; }
+  }
 
-// 3. ログ送信関数
-function sendLog(event, memo = "") {
-    const code = localStorage.getItem('ad_code') || "direct";
-    const gasUrl = "https://script.google.com/macros/s/AKfycbwbGi7Y9XFFmUS8t_KDXC6uQG-zIA9uOuPkWgh8HmPGJIGtXcJUlUgEzrBL-Sm64XML/exec";
+  var p = new URLSearchParams(location.search);
 
-    fetch(gasUrl, {
-        method: "POST",
-        mode: "no-cors", 
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-            ad_code: code,
-            user_id: userId,
-            event: event,
-            page: window.location.href,
-            memo: memo
-        })
-    });
-}
+  /* --- 広告コード（?a=） --- */
+  if (p.get('a')) lsSet('ad_code', p.get('a'));
+  var adCode = p.get('a') || lsGet('ad_code') || 'direct';
 
-// 4. ページ表示時の処理
-window.addEventListener('DOMContentLoaded', () => {
-    // ページ閲覧のメモ欄をURLに応じて分かりやすく自動変更
-    let pageMemo = "ページ閲覧";
-    if (window.location.href.includes('/thanks/')) pageMemo = "サンクス到達";
-    if (window.location.href.includes('/sales/')) pageMemo = "SL閲覧";
-    
-    sendLog("page_view", pageMemo);
+  /* --- 訪問者ID（vid / UUID） ---
+     申込ページと同じ 'vid' キーを使う。旧タグの 'user_id'(user_xxxxx) とは別物なので統一する。 */
+  var vid = p.get('uid') || lsGet('vid');
+  if (!vid) {
+    vid = (window.crypto && crypto.randomUUID) ? crypto.randomUUID()
+      : 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function (c) {
+          var r = Math.random() * 16 | 0; return (c === 'x' ? r : (r & 3 | 8)).toString(16);
+        });
+  }
+  lsSet('vid', vid);
 
-    // 次のページへのリンク（trelab123.jpを含むaタグ）にコードを自動付与
-    const nextBtn = document.querySelector('a[href*="trelab123.jp"]');
-    const savedCode = localStorage.getItem('ad_code');
-    if (nextBtn) {
-        const url = new URL(nextBtn.href);
-        if (savedCode) url.searchParams.set('a', savedCode);
-        url.searchParams.set('uid', userId); // ユーザーIDを次のドメインへ引き継ぐ
-        nextBtn.href = url.toString(); 
+  /* --- メールアドレス（メール導線のみ存在する） --- */
+  if (p.get('mail')) lsSet('user_mail', p.get('mail'));
+  var mail = getCookie('umail') || getCookie('p_email') || lsGet('user_mail') || '';
+  function uid(){ return mail || vid; }
+
+  /* --- 送信 ---
+     sendBeacon は失敗しても例外を投げず false を返すだけなので必ず戻り値を判定する。
+     Content-Type は text/plain（application/json だと CORS プリフライトで GAS が受け取れない）。 */
+  function send(o) {
+    o.vid = vid; o.ad_code = adCode;
+    var body = JSON.stringify(o), ok = false;
+    try {
+      if (navigator.sendBeacon) {
+        ok = navigator.sendBeacon(GAS_URL, new Blob([body], { type: 'text/plain;charset=UTF-8' }));
+      }
+    } catch (e) { ok = false; }
+    if (!ok) {
+      try { fetch(GAS_URL, { method:'POST', mode:'no-cors', keepalive:true, body:body }); } catch (e) {}
     }
-});
+  }
+
+  var slName = (location.pathname.match(/\/sales\/([^\/]+)/) || [,''])[1] || 'unknown';
+
+  /* --- 1. SL閲覧 --- */
+  send({ user_id: uid(), event: 'sl_view', page: location.href, memo: 'SL閲覧(' + slName + ')' });
+
+  /* --- 2. 遷移先リンクへの引き継ぎ＋CTAクリック計測 ---
+     申込リンクは target="_blank"。LINE内ブラウザだと外部ブラウザに飛んで localStorage が
+     切れることがあるため、同一オリジンでもURLパラメータで明示的に渡す。 */
+  document.addEventListener('click', function (e) {
+    if (!e.target || !e.target.closest) return;
+    var a = e.target.closest('a[href]');
+    if (!a) return;
+    var raw = a.getAttribute('href') || '';
+    if (raw.charAt(0) === '#' || /^(javascript|mailto|tel):/i.test(raw)) return;
+
+    var url;
+    try { url = new URL(a.href, location.href); } catch (err) { return; }
+
+    var isPay    = /\/LP\/pay\//.test(url.pathname);
+    var isLpro   = /(^|\.)kma\.lpro-pm5\.com$/.test(url.hostname);
+    var isTrelab = /(^|\.)trelab123\.jp$/.test(url.hostname);
+    if (!isPay && !isLpro && !isTrelab) return;
+
+    if (adCode && adCode !== 'direct') url.searchParams.set('a', adCode);
+
+    if (isPay) {
+      url.searchParams.set('uid', vid);
+      send({ user_id: uid(), event: 'sl_cta', page: location.href, memo: '申込ページへ(' + slName + ')' });
+    } else if (isLpro) {
+      // LPRO の広告コード指定は afl=。a= は識別用パラメータ名(afn_name)であって広告コードではない。
+      if (!url.searchParams.get('afl') && adCode && adCode !== 'direct') {
+        url.searchParams.set('afl', adCode);
+      }
+      // cid：メール導線＝メールアドレス／LINE導線＝訪問者ID(UUID)
+      url.searchParams.set('cid', uid());
+      send({ user_id: uid(), event: 'line_tap', page: location.href, memo: 'LINE遷移(' + slName + ')' });
+    } else {
+      url.searchParams.set('uid', vid);
+    }
+    a.href = url.toString();
+  }, true);
+
+})();
 </script>
+
 
 <!-- SLクリック済 -->
 <img src="https://kma.lpro-pm5.com/mem/act/2PjNDvW6QIHle23wihopfQQFgsIiNA?ucode={+member_ucode+}" alt="" style="display:none">
